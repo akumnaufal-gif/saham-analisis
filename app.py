@@ -4,118 +4,100 @@ import pandas as pd
 import numpy as np
 
 st.set_page_config(page_title="Analisis Saham IDX", layout="wide", page_icon="📈")
-st.title("📊 Analisis Emiten Saham Indonesia")
-st.markdown("**Harian + Scalping Intraday**")
+st.title("📊 Screening Semua Emiten IDX")
+st.markdown("**Trend • Akumulasi • RSI • Uptrend Filter**")
 
 st.sidebar.header("Pengaturan")
-tickers_input = st.sidebar.text_area(
-    "Masukkan Ticker (pisah koma)", 
-    "BBCA, BBRI, BMRI, BBNI, TLKM, ASII, ADRO",
-    height=120
-)
+tickers_input = st.sidebar.text_area("Ticker Manual (opsional)", "BBCA, BBRI, BMRI", height=100)
 
-mode = st.radio("Pilih Jenis Analisa", 
-                ["📅 Harian (Swing/Trend)", "⚡ Scalping / Intraday (5 menit)"], 
-                horizontal=True)
+mode = st.radio("Pilih Mode", ["📋 Manual Ticker", "🔍 Screen Semua Emiten (Rekomendasi)"], horizontal=True)
 
-if st.button("🚀 JALANKAN ANALISA SEKARANG", type="primary", use_container_width=True):
-    tickers = [t.strip().upper() + ".JK" for t in tickers_input.split(",") if t.strip()]
-    
-    with st.spinner(f"Mengambil data {mode}..."):
-        results = []
+if st.button("🚀 JALANKAN SCREENING", type="primary", use_container_width=True):
+    with st.spinner("Mengambil data... (bisa agak lama di mode Screen All)"):
+        if mode == "📋 Manual Ticker":
+            tickers = [t.strip().upper() + ".JK" for t in tickers_input.split(",") if t.strip()]
+        else:
+            # Daftar saham populer + LQ45 (bisa ditambah)
+            popular_tickers = [
+                "BBCA","BBRI","BMRI","BBNI","TLKM","ASII","ADRO","GOTO","AMRT","UNVR",
+                "BRIS","BTPS","CPIN","KLBF","MDKA","ANTM","INKP","PTBA","ADRO","BREN",
+                "ISAT","EXCL","PGAS","PGEO","MEDC","SMGR","UNTR","SCMA","ICBP","INDF"
+            ]
+            tickers = [t + ".JK" for t in popular_tickers]
         
+        results = []
         for ticker in tickers:
             try:
-                if mode == "📅 Harian (Swing/Trend)":
-                    # Harian - tetap stabil
-                    hist = yf.Ticker(ticker).history(period="2y")
-                    if len(hist) < 100:
-                        results.append({'Ticker': ticker.replace('.JK',''), 'Status': 'Data harian kurang'})
-                        continue
-                    
-                    last = hist.iloc[-1]
-                    prev = hist.iloc[-2]
-                    change = round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2)
-                    
-                    sma50 = hist['Close'].rolling(50).mean().iloc[-1]
-                    sma200 = hist['Close'].rolling(200).mean().iloc[-1]
-                    
-                    trend = "🟢 UPTREND" if (last['Close'] > sma50 and sma50 > sma200) else \
-                            "🔴 DOWNTREND" if (last['Close'] < sma50 and sma50 < sma200) else "⚪ SIDEWAYS"
-                    
-                    delta = hist['Close'].diff()
-                    gain = delta.where(delta > 0, 0).rolling(14).mean().iloc[-1]
-                    loss = (-delta.where(delta < 0, 0)).rolling(14).mean().iloc[-1]
-                    rsi = 100 - (100 / (1 + gain/loss)) if loss != 0 else 50
-                    
-                    results.append({
-                        'Ticker': ticker.replace('.JK',''),
-                        'Harga': round(last['Close'],2),
-                        'Change %': change,
-                        'RSI': round(rsi,1),
-                        'Trend': trend,
-                        'Status': 'OK'
-                    })
+                hist = yf.Ticker(ticker).history(period="1y")
+                if len(hist) < 100: continue
                 
-                else:  # SCALPING
-                    # Percobaan bertahap
-                    data = None
-                    for attempt in ["5m", "15m", "1h"]:
-                        try:
-                            data = yf.download(ticker, period="10d", interval=attempt, progress=False)
-                            if len(data) >= 20:
-                                break
-                        except:
-                            continue
-                    
-                    if data is None or len(data) < 20:
-                        results.append({'Ticker': ticker.replace('.JK',''), 'Status': 'Data intraday tidak tersedia (coba saat pasar buka)'})
-                        continue
-                        
-                    last = data.iloc[-1]
-                    prev = data.iloc[-2] if len(data) > 1 else last
-                    
-                    change = round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2)
-                    
-                    # RSI
-                    delta = data['Close'].diff()
-                    gain = delta.where(delta > 0, 0).rolling(14).mean().iloc[-1]
-                    loss = (-delta.where(delta < 0, 0)).rolling(14).mean().iloc[-1]
-                    rsi = 100 - (100 / (1 + gain/loss)) if loss != 0 else 50
-                    
-                    # VWAP
-                    data['TP'] = (data['High'] + data['Low'] + data['Close']) / 3
-                    vwap = (data['TP'] * data['Volume']).cumsum().iloc[-1] / data['Volume'].cumsum().iloc[-1]
-                    
-                    momentum = round((last['Close'] / data['Close'].iloc[-10] - 1) * 100, 2) if len(data) > 10 else 0
-                    
-                    if rsi < 35 and last['Close'] > vwap:
-                        signal = "🟢 STRONG BUY"
-                    elif rsi > 68 and last['Close'] < vwap:
-                        signal = "🔴 STRONG SELL"
-                    else:
-                        signal = "⚪ Neutral"
-                    
-                    results.append({
-                        'Ticker': ticker.replace('.JK',''),
-                        'Harga': round(last['Close'],2),
-                        'Change %': change,
-                        'RSI': round(rsi,1),
-                        'VWAP': round(vwap,2),
-                        'Momentum': momentum,
-                        'Signal Scalping': signal,
-                        'Status': 'OK'
-                    })
-                    
+                last = hist.iloc[-1]
+                change = round(((last['Close'] - hist.iloc[-2]['Close']) / hist.iloc[-2]['Close']) * 100, 2)
+                
+                sma50 = hist['Close'].rolling(50).mean().iloc[-1]
+                sma200 = hist['Close'].rolling(200).mean().iloc[-1]
+                
+                if last['Close'] > sma50 and sma50 > sma200:
+                    trend = "🟢 UPTREND"
+                elif last['Close'] < sma50 and sma50 < sma200:
+                    trend = "🔴 DOWNTREND"
+                else:
+                    trend = "⚪ SIDEWAYS"
+                
+                # RSI
+                delta = hist['Close'].diff()
+                gain = delta.where(delta > 0, 0).rolling(14).mean().iloc[-1]
+                loss = (-delta.where(delta < 0, 0)).rolling(14).mean().iloc[-1]
+                rsi = 100 - (100 / (1 + gain/loss)) if loss != 0 else 50
+                
+                # Akumulasi OBV
+                hist['OBV'] = (hist['Volume'] * np.sign(hist['Close'].diff())).cumsum()
+                obv_now = hist['OBV'].iloc[-1]
+                obv_30 = hist['OBV'].iloc[-31] if len(hist) > 30 else obv_now
+                price_change_30 = ((last['Close'] / hist['Close'].iloc[-31]) - 1) * 100 if len(hist) > 30 else 0
+                
+                vol_recent = hist['Volume'].tail(10).mean()
+                vol_avg = hist['Volume'].mean()
+                
+                if (obv_now > obv_30) and abs(price_change_30) < 15 and vol_recent > vol_avg * 1.1 and rsi < 55:
+                    akum = "💰 KUAT"
+                elif obv_now > obv_30 and rsi < 60:
+                    akum = "💰 Sedang"
+                else:
+                    akum = "Tidak"
+                
+                results.append({
+                    'Ticker': ticker.replace('.JK', ''),
+                    'Harga': round(last['Close'], 2),
+                    'Change %': change,
+                    'RSI': round(rsi, 1),
+                    'Trend': trend,
+                    'Akumulasi': akum,
+                    '30d %': round(price_change_30, 1)
+                })
             except:
-                results.append({'Ticker': ticker.replace('.JK',''), 'Status': 'Error'})
                 continue
         
-        df = pd.DataFrame(results)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        
-        if mode.startswith("⚡"):
-            st.info("💡 Scalping terbaik saat **pasar sedang buka** (09:00 - 16:00 WIB)")
-            st.warning("⚠️ Tidak ada jaminan profit. Scalping sangat berisiko!")
+        if results:
+            df = pd.DataFrame(results)
+            
+            # Sorting prioritas
+            df['Priority'] = df['Trend'].apply(lambda x: 0 if 'UPTREND' in x else 1)
+            df = df.sort_values(['Priority', 'Akumulasi'], ascending=[True, False])
+            
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            st.subheader("🔥 Rekomendasi Saat Ini")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Uptrend + Akumulasi Kuat**")
+                st.dataframe(df[(df['Trend'].str.contains('UPTREND')) & (df['Akumulasi'].str.contains('KUAT'))])
+            with col2:
+                st.write("**RSI Rendah (Oversold)**")
+                st.dataframe(df[df['RSI'] < 40])
+            
+            st.success(f"✅ Berhasil screening {len(df)} emiten!")
+        else:
+            st.error("Gagal mengambil data. Coba lagi.")
 
-st.caption("Data dari Yahoo Finance • Refresh dengan klik tombol")
+st.caption("Mode Screen All menggunakan daftar saham populer • Lebih lengkap = lebih lambat")
