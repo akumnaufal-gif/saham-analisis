@@ -4,15 +4,15 @@ import pandas as pd
 import numpy as np
 
 st.set_page_config(page_title="IDX Stock Hunter", layout="wide", page_icon="🚀")
-st.title("📈 IDX Stock Hunter")
-st.markdown("**Deteksi Akumulasi Kuat & Rebound - Versi Stabil**")
+st.title("📈 IDX Stock Hunter - Dengan Entry Strategy")
+st.markdown("**Deteksi Akumulasi + Rekomendasi Entry Zone**")
 
 st.sidebar.header("Pengaturan")
 tickers_input = st.text_area("Ticker Manual (pisah koma)", 
-    "DEWA, BUVA, BBCA, BBRI, BREN, ADRO, AMRT", height=80)
+    "DEWA, BUVA, BBCA, BBRI, BREN, ADRO", height=80)
 
 if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True):
-    with st.spinner("Mengambil data..."):
+    with st.spinner("Menganalisis..."):
         broad = ["DEWA","BUVA","BBCA","BBRI","BMRI","BBNI","TLKM","ASII","ADRO","BREN","AMRT","UNVR","BRIS","GOTO"]
         tickers = [t + ".JK" for t in broad]
 
@@ -30,6 +30,9 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
 
                 sma20 = hist['Close'].rolling(20).mean().iloc[-1]
                 sma50 = hist['Close'].rolling(50).mean().iloc[-1]
+                recent_high = hist['Close'].tail(20).max()
+                recent_low = hist['Close'].tail(20).min()
+
                 trend = "🟢 UPTREND" if last['Close'] > sma20 else "🔴 DOWNTREND" if last['Close'] < sma50 else "⚪ SIDEWAYS"
 
                 delta = hist['Close'].diff()
@@ -42,9 +45,11 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 obv_30 = hist['OBV'].iloc[-31] if len(hist) > 30 else obv_now
                 vol_recent = hist['Volume'].tail(10).mean()
                 vol_avg = hist['Volume'].mean()
-                price_30d = ((last['Close'] / hist['Close'].iloc[-31]) - 1) * 100 if len(hist) > 30 else 0
                 vol_spike = round(vol_recent / vol_avg, 2)
 
+                price_30d = ((last['Close'] / hist['Close'].iloc[-31]) - 1) * 100 if len(hist) > 30 else 0
+
+                # Logika Akumulasi
                 if (change > 4 and vol_spike > 1.75) or \
                    (change > 2.5 and vol_spike > 1.65 and rsi < 65) or \
                    (obv_now > obv_30 and vol_spike > 1.6 and rsi < 58):
@@ -56,56 +61,46 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 else:
                     akum = "Tidak Jelas"
 
+                # === ENTRY STRATEGY ===
+                if "AKUMULASI KUAT" in akum:
+                    if "UPTREND" in trend:
+                        entry_price = round(sma20, 2)
+                        entry_note = "Pullback ke SMA20"
+                    else:
+                        entry_price = round(recent_high * 1.01, 2)
+                        entry_note = "Breakout di atas recent high"
+                elif "Akumulasi Sedang" in akum and "DOWNTREND" in trend:
+                    entry_price = round(sma20, 2)
+                    entry_note = "Tunggu break SMA20 ke atas"
+                else:
+                    entry_price = round(last['Close'], 2)
+                    entry_note = "Ikuti harga saat ini"
+
                 results.append({
                     'Ticker': ticker.replace('.JK',''),
-                    'Harga': round(last['Close'], 2),
+                    'Harga Saat Ini': round(last['Close'], 2),
                     'Change %': change,
-                    'RSI': round(rsi, 1),
                     'Trend': trend,
-                    'Akumulasi / Distribusi': akum,
-                    '30 Hari %': round(price_30d, 1),
-                    'Vol Spike': vol_spike
+                    'Akumulasi': akum,
+                    'Vol Spike': vol_spike,
+                    'Entry Harga': entry_price,
+                    'Entry Note': entry_note
                 })
             except:
                 continue
 
         df = pd.DataFrame(results)
 
-        # ==================== TOP AKUMULASI ====================
-        st.subheader("🏆 Top Emiten Akumulasi Kuat Hari Ini")
-        top = df[df['Akumulasi / Distribusi'] == "💰 AKUMULASI KUAT"].sort_values('Change %', ascending=False).head(10)
+        # Top Akumulasi
+        st.subheader("🏆 Top Emiten Akumulasi Kuat + Entry Strategy")
+        top = df[df['Akumulasi'].str.contains("KUAT")].sort_values('Change %', ascending=False)
         if not top.empty:
-            st.success(f"✅ Ditemukan {len(top)} emiten Akumulasi Kuat")
             st.dataframe(top, use_container_width=True, hide_index=True)
         else:
-            st.warning("Belum ada emiten Akumulasi Kuat saat ini.")
+            st.warning("Belum ada emiten Akumulasi Kuat.")
 
-        # ==================== TABEL LENGKAP DENGAN WARNA ====================
-        st.subheader("📋 Semua Hasil Analisa")
+        # Semua Hasil
+        st.subheader("📋 Semua Hasil + Entry Suggestion")
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
-        # Perbaikan styling
-        def highlight_akum(row):
-            if row['Akumulasi / Distribusi'] == "💰 AKUMULASI KUAT":
-                return ['background-color: #90EE90; color: black; font-weight: bold'] * len(row)
-            elif row['Akumulasi / Distribusi'] == "💰 Akumulasi Sedang":
-                return ['background-color: #D4EDDA'] * len(row)
-            elif row['Akumulasi / Distribusi'] == "📉 DISTRIBUSI":
-                return ['background-color: #FFB3B3'] * len(row)
-            return [''] * len(row)
-
-        styled_df = df.style.apply(highlight_akum, axis=1)
-
-        # Tooltip
-        column_config = {
-            "Trend": st.column_config.TextColumn("Trend", help="🟢 UPTREND = Harga di atas SMA20\n🔴 DOWNTREND = Harga di bawah SMA50"),
-            "Akumulasi / Distribusi": st.column_config.TextColumn(
-                "Akumulasi / Distribusi", 
-                help="💰 AKUMULASI KUAT = Smart money masuk kuat (OBV naik + Volume Spike + RSI tidak terlalu tinggi)"
-            ),
-            "RSI": st.column_config.TextColumn("RSI (14)", help="RSI < 48 = Potensi Oversold\nRSI > 60 = Potensi Overbought"),
-            "Vol Spike": st.column_config.TextColumn("Vol Spike", help="Volume 10 hari terakhir dibanding rata-rata\n>1.6 = Volume meningkat signifikan")
-        }
-
-        st.dataframe(styled_df, use_container_width=True, hide_index=True, column_config=column_config)
-
-st.caption("Logika realistis • Warna hijau = Akumulasi Kuat • Refresh berkala")
+st.caption("Entry Strategy hanya sebagai referensi berdasarkan indikator • Bukan rekomendasi trading • Selalu gunakan risk management")
