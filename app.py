@@ -5,7 +5,7 @@ import numpy as np
 
 st.set_page_config(page_title="IDX Stock Hunter Pro", layout="wide", page_icon="🚀")
 st.title("📈 IDX Stock Hunter Pro")
-st.markdown("**Pre-Surge Detector + MACD + Probability Score + Entry Strategy**")
+st.markdown("**Pre-Surge + Probability Score + Trading Style Recommendation**")
 
 st.sidebar.header("Pengaturan")
 tickers_input = st.text_area("Ticker Manual (pisah koma)", 
@@ -28,12 +28,10 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 last = hist.iloc[-1]
                 change = round(((last['Close'] - hist.iloc[-2]['Close']) / hist.iloc[-2]['Close']) * 100, 2)
 
-                # Trend
                 sma20 = hist['Close'].rolling(20).mean().iloc[-1]
                 sma50 = hist['Close'].rolling(50).mean().iloc[-1]
                 trend = "🟢 UPTREND" if last['Close'] > sma20 else "🔴 DOWNTREND" if last['Close'] < sma50 else "⚪ SIDEWAYS"
 
-                # RSI
                 delta = hist['Close'].diff()
                 gain = delta.where(delta > 0, 0).rolling(14).mean().iloc[-1]
                 loss = (-delta.where(delta < 0, 0)).rolling(14).mean().iloc[-1]
@@ -43,17 +41,17 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 exp1 = hist['Close'].ewm(span=12, adjust=False).mean()
                 exp2 = hist['Close'].ewm(span=26, adjust=False).mean()
                 macd = exp1 - exp2
-                signal = macd.ewm(span=9, adjust=False).mean()
-                macd_hist = macd - signal
-                macd_signal = "Bullish" if macd_hist.iloc[-1] > 0 else "Bearish"
+                macd_hist = macd - macd.ewm(span=9, adjust=False).mean()
 
-                # Volume & OBV
-                hist['OBV'] = (hist['Volume'] * np.sign(hist['Close'].diff())).cumsum()
-                obv_now = hist['OBV'].iloc[-1]
-                obv_30 = hist['OBV'].iloc[-31] if len(hist) > 30 else obv_now
+                # Volume
                 vol_recent = hist['Volume'].tail(10).mean()
                 vol_avg = hist['Volume'].mean()
                 vol_spike = round(vol_recent / vol_avg, 2)
+
+                # OBV
+                hist['OBV'] = (hist['Volume'] * np.sign(hist['Close'].diff())).cumsum()
+                obv_now = hist['OBV'].iloc[-1]
+                obv_30 = hist['OBV'].iloc[-31] if len(hist) > 30 else obv_now
 
                 # Support & Resistance
                 support = round(hist['Close'].tail(20).min(), 2)
@@ -76,22 +74,30 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 else:
                     akum = "Tidak Jelas"
 
-                # Pre-Surge Detector
+                # Pre-Surge
                 if vol_spike > 2.5 and change > 2:
-                    pre_surge = "🔥 POTENSI PUMP KUAT"
-                elif vol_spike > 1.8 and rsi < 65:
+                    pre_surge = "🔥 POTENSI PUMP"
+                elif vol_spike > 1.8:
                     pre_surge = "⚡ Potensi Naik Dini"
                 else:
                     pre_surge = "-"
 
-                # Entry Strategy
-                if score >= 80:
-                    entry = round(last['Close'] * 0.985, 2)
-                    note = "Entry sekarang"
+                # === TRADING STYLE RECOMMENDATION ===
+                if vol_spike > 2.5 and rsi > 65:
+                    style = "⚡ HARIAN / SCALPING"
+                    reason = "Volume ekstrem + momentum kuat"
+                elif score >= 75 and "UPTREND" in trend and vol_spike > 1.4:
+                    style = "📈 SWING TRADING"
+                    reason = "Trend kuat + akumulasi bagus"
+                elif score >= 65 and "Akumulasi" in akum:
+                    style = "📈 SWING TRADING"
+                    reason = "Akumulasi sedang + potensi reversal"
                 else:
-                    entry = round(support * 1.01, 2)
-                    note = "Tunggu dekat support"
+                    style = "🕒 SWING / HOLD"
+                    reason = "Lebih cocok swing jangka menengah"
 
+                # Entry Suggestion
+                entry = round(last['Close'] * 0.99, 2) if score >= 75 else round(support * 1.01, 2)
                 stop_loss = round(entry * 0.94, 2)
                 target = round(resistance, 2)
                 rr = round((target - entry) / (entry - stop_loss), 2) if (entry - stop_loss) > 0 else 0
@@ -104,27 +110,23 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                     'Akumulasi': akum,
                     'Pre-Surge': pre_surge,
                     'Probability': score,
+                    'Style': style,
                     'Entry': entry,
                     'Stop Loss': stop_loss,
                     'Target': target,
                     'R:R': f"1:{rr}",
-                    'Vol Spike': vol_spike,
-                    'RSI': round(rsi, 1)
+                    'Vol Spike': vol_spike
                 })
             except:
                 continue
 
         df = pd.DataFrame(results)
 
-        # Top Pre-Surge & High Probability
-        st.subheader("🔥 Top Pre-Surge + Probability Tinggi")
-        top = df[(df['Pre-Surge'] != "-") | (df['Probability'] >= 75)].sort_values('Probability', ascending=False)
-        if not top.empty:
-            st.dataframe(top, use_container_width=True, hide_index=True)
-        else:
-            st.warning("Belum ada sinyal kuat saat ini.")
+        st.subheader("🔥 Rekomendasi Teratas")
+        top = df[df['Probability'] >= 70].sort_values('Probability', ascending=False)
+        st.dataframe(top, use_container_width=True, hide_index=True)
 
         st.subheader("📋 Semua Hasil Analisa")
         st.dataframe(df.sort_values('Probability', ascending=False), use_container_width=True, hide_index=True)
 
-st.caption("Pre-Surge = Deteksi dini potensi naik tajam • Probability Score semakin tinggi = semakin kuat sinyal • Refresh berkala")
+st.caption("Style Recommendation = Swing vs Harian berdasarkan Volume, Momentum & Trend • Refresh berkala")
