@@ -2,11 +2,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 st.set_page_config(page_title="Analisis Saham IDX", layout="wide", page_icon="📈")
 st.title("📊 Analisis Emiten Saham Indonesia")
-st.markdown("**Teknikal + Intraday Scalping Signals**")
+st.markdown("**Harian + Scalping Intraday**")
 
 # Sidebar
 st.sidebar.header("Pengaturan")
@@ -16,35 +15,65 @@ tickers_input = st.sidebar.text_area(
     height=120
 )
 
-tab1, tab2 = st.tabs(["📅 Analisis Harian (Swing)", "⚡ Scalping / Intraday"])
+# Pilih Mode Analisa
+mode = st.radio("Pilih Jenis Analisa", ["📅 Harian (Swing/Trend)", "⚡ Scalping / Intraday (5 menit)"], horizontal=True)
 
-with tab1:
-    if st.button("🚀 Analisis Harian (OBV + Trend)", type="primary"):
-        # Kode harian OBV yang lama tetap di sini (bisa copy dari sebelumnya)
-        st.info("Fitur harian tetap sama seperti sebelumnya...")
-
-with tab2:
-    if st.button("⚡ Analisis Intraday & Scalping Signals", type="primary"):
-        tickers = [t.strip().upper() + ".JK" for t in tickers_input.split(",") if t.strip()]
+if st.button("🚀 JALANKAN ANALISA SEKARANG", type="primary", use_container_width=True):
+    tickers = [t.strip().upper() + ".JK" for t in tickers_input.split(",") if t.strip()]
+    
+    with st.spinner("Mengambil data... Mohon tunggu sebentar"):
+        results = []
         
-        with st.spinner("Mengambil data 5 menit terbaru..."):
-            results = []
-            for ticker in tickers:
-                try:
-                    # Data Intraday 5 menit (hari ini)
+        for ticker in tickers:
+            try:
+                if mode == "📅 Harian (Swing/Trend)":
+                    # === ANALISA HARIAN ===
+                    hist = yf.Ticker(ticker).history(period="2y")
+                    if len(hist) < 100: continue
+                    last = hist.iloc[-1]
+                    prev = hist.iloc[-2]
+                    change = round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2)
+                    
+                    sma50 = hist['Close'].rolling(50).mean().iloc[-1]
+                    sma200 = hist['Close'].rolling(200).mean().iloc[-1]
+                    
+                    if last['Close'] > sma50 and sma50 > sma200:
+                        trend = "🟢 UPTREND"
+                    elif last['Close'] < sma50 and sma50 < sma200:
+                        trend = "🔴 DOWNTREND"
+                    else:
+                        trend = "⚪ SIDEWAYS"
+                    
+                    delta = hist['Close'].diff()
+                    gain = delta.where(delta > 0, 0).rolling(14).mean().iloc[-1]
+                    loss = (-delta.where(delta < 0, 0)).rolling(14).mean().iloc[-1]
+                    rsi = 100 - (100 / (1 + gain/loss)) if loss != 0 else 50
+                    
+                    # OBV Akumulasi
+                    hist['OBV'] = (hist['Volume'] * np.sign(hist['Close'].diff())).cumsum()
+                    obv_now = hist['OBV'].iloc[-1]
+                    obv_30 = hist['OBV'].iloc[-31] if len(hist) > 30 else obv_now
+                    
+                    akum = "💰 YA - Akumulasi" if (obv_now > obv_30) and (rsi < 55) else "Tidak"
+                    
+                    results.append({
+                        'Ticker': ticker.replace('.JK', ''),
+                        'Harga': round(last['Close'], 2),
+                        'Change %': change,
+                        'RSI': round(rsi, 1),
+                        'Trend': trend,
+                        'Akumulasi': akum
+                    })
+                
+                else:
+                    # === SCALPING INTRADAY ===
                     data = yf.download(ticker, period="5d", interval="5m")
-                    if len(data) < 20:
-                        continue
-                        
+                    if len(data) < 30: continue
                     last = data.iloc[-1]
                     prev = data.iloc[-2]
                     
-                    # Gap hari ini
-                    today_open = data['Open'].iloc[-1] if len(data) > 0 else last['Close']
-                    prev_close = data['Close'].iloc[0] if 'Prev Close' in data.columns else data['Close'].iloc[-20]
-                    gap = round(((today_open - prev_close) / prev_close) * 100, 2)
+                    change5m = round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2)
                     
-                    # RSI 14 (5menit)
                     delta = data['Close'].diff()
                     gain = delta.where(delta > 0, 0).rolling(14).mean().iloc[-1]
                     loss = (-delta.where(delta < 0, 0)).rolling(14).mean().iloc[-1]
@@ -52,43 +81,39 @@ with tab2:
                     
                     # VWAP
                     data['TP'] = (data['High'] + data['Low'] + data['Close']) / 3
-                    data['TPV'] = data['TP'] * data['Volume']
-                    vwap = data['TPV'].cumsum().iloc[-1] / data['Volume'].cumsum().iloc[-1]
+                    vwap = (data['TP'] * data['Volume']).cumsum().iloc[-1] / data['Volume'].cumsum().iloc[-1]
                     
-                    # Momentum
-                    momentum = round((last['Close'] / data['Close'].iloc[-10] - 1) * 100, 2)
+                    momentum = round((last['Close'] / data['Close'].iloc[-8] - 1) * 100, 2)
                     
-                    # Sinyal Scalping Sederhana
-                    if rsi < 35 and last['Close'] > vwap and momentum > 0:
-                        signal = "🟢 **STRONG BUY** (Scalping Up)"
-                    elif rsi > 70 and last['Close'] < vwap and momentum < 0:
-                        signal = "🔴 **STRONG SELL** (Scalping Down)"
+                    if rsi < 35 and last['Close'] > vwap:
+                        signal = "🟢 STRONG BUY"
+                    elif rsi > 68 and last['Close'] < vwap:
+                        signal = "🔴 STRONG SELL"
                     elif rsi < 45 and last['Close'] > vwap:
-                        signal = "🟢 BUY Signal"
+                        signal = "🟢 BUY"
                     elif rsi > 60 and last['Close'] < vwap:
-                        signal = "🔴 SELL Signal"
+                        signal = "🔴 SELL"
                     else:
-                        signal = "⚪ Neutral / Tunggu"
+                        signal = "⚪ Neutral"
                     
                     results.append({
                         'Ticker': ticker.replace('.JK', ''),
-                        'Harga Saat Ini': round(last['Close'], 2),
-                        'Change 5m %': round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2),
-                        'RSI (5m)': round(rsi, 1),
+                        'Harga': round(last['Close'], 2),
+                        'Change 5m %': change5m,
+                        'RSI 5m': round(rsi, 1),
                         'VWAP': round(vwap, 2),
-                        'Gap Today %': gap,
-                        'Momentum 10 candle': momentum,
-                        'Signal Scalping': signal,
-                        'Volume': int(last['Volume'])
+                        'Momentum': momentum,
+                        'Signal Scalping': signal
                     })
-                except:
-                    continue
             
-            if results:
-                df = pd.DataFrame(results)
-                st.dataframe(df, use_container_width=True, hide_index=True)
-                
-                st.success("✅ Sinyal Scalping di-update setiap kali kamu klik tombol!")
-                st.warning("⚠️ Ini bukan jaminan profit. Gunakan stop-loss ketat (0.5-1%). Scalping sangat berisiko tinggi.")
-            else:
-                st.error("Gagal mengambil data intraday. Coba lagi nanti.")
+            except:
+                continue
+        
+        if results:
+            df = pd.DataFrame(results)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.success(f"✅ Berhasil! {len(df)} emiten dianalisa")
+        else:
+            st.error("Tidak ada data yang berhasil diambil.")
+
+st.caption("Data dari Yahoo Finance • Refresh tiap klik tombol • Bukan rekomendasi trading")
