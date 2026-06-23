@@ -13,7 +13,17 @@ tickers_input = st.text_area("Ticker Manual (pisah koma)",
 
 if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True):
     with st.spinner("Menganalisis..."):
-        broad = ["BALI","DEWA","BUVA","BBCA","BBRI","BMRI","BBNI","TLKM","ASII","ADRO","BREN","AMRT","UNVR","BRIS","GOTO","BUKA"]
+        broad = ["BBCA", "BBRI", "BMRI", "BBNI", "TLKM", "ASII", "ADRO", "AMRT", "UNVR", "CPIN",
+    "KLBF", "MDKA", "ANTM", "INKP", "PTBA", "PGAS", "MEDC", "SMGR", "UNTR", "ICBP",
+    "INDF", "SCMA", "BRIS", "BTPS", "GOTO", "BUKA", "BREN", "AMMN", "AKRA", "TPIA",
+    "ARTO", "EXCL", "ISAT", "PGEO", "HRUM", "ITMG", "TAPG", "RAJA", "BUMI", "CNKO",
+    "SRTG", "WOOD", "TINS", "ESSA", "CUAN", "WIFI", "HRTA", "PLAN", "BMBL", "HADE",
+    "INDX", "JPFA", "CTRA", "MAPA", "GGRM", "DSSA", "MTEL", "BKSL", "CBDK", "ABMM",
+    "ACES", "AALI", "ADMR", "BSSR", "BYAN", "DEWA", "BUVA", "JAST", "MLPT", "NCKL",
+    "ABBA", "ABDA", "ACST", "AADI", "ESSA", "GGRM", "HADE", "INDX", "PLAN", "RAJA",
+    "SRTG", "TAPG", "TINS", "WOOD", "BMBL", "HRUM", "ITMG", "PGEO", "ARTO", "EXCL",
+    "ISAT", "BRIS", "BTPS", "AMRT", "UNVR", "CPIN", "KLBF", "MDKA", "ANTM", "INKP",
+    "PTBA", "PGAS", "MEDC", "SMGR"]
         tickers = [t + ".JK" for t in broad]
 
         if tickers_input.strip():
