@@ -83,17 +83,17 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
         # ==================== TABEL LENGKAP DENGAN WARNA ====================
         st.subheader("📋 Semua Hasil Analisa")
 
-        def highlight_akum(val):
-            if val == "💰 AKUMULASI KUAT":
-                return 'background-color: #90EE90; color: black; font-weight: bold'
-            elif val == "💰 Akumulasi Sedang":
-                return 'background-color: #D4EDDA'
-            elif val == "📉 DISTRIBUSI":
-                return 'background-color: #FFB3B3'
-            return ''
+        # Perbaikan styling
+        def highlight_akum(row):
+            if row['Akumulasi / Distribusi'] == "💰 AKUMULASI KUAT":
+                return ['background-color: #90EE90; color: black; font-weight: bold'] * len(row)
+            elif row['Akumulasi / Distribusi'] == "💰 Akumulasi Sedang":
+                return ['background-color: #D4EDDA'] * len(row)
+            elif row['Akumulasi / Distribusi'] == "📉 DISTRIBUSI":
+                return ['background-color: #FFB3B3'] * len(row)
+            return [''] * len(row)
 
-        # Perbaikan styling untuk pandas terbaru
-        styled_df = df.style.apply(highlight_akum, subset=['Akumulasi / Distribusi'], axis=0)
+        styled_df = df.style.apply(highlight_akum, axis=1)
 
         # Tooltip
         column_config = {
