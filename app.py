@@ -92,18 +92,18 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 return 'background-color: #FFB3B3'
             return ''
 
-        # Styling
-        styled_df = df.style.applymap(highlight_akum, subset=['Akumulasi / Distribusi'])
+        # Perbaikan styling untuk pandas terbaru
+        styled_df = df.style.apply(highlight_akum, subset=['Akumulasi / Distribusi'], axis=0)
 
-        # Column Config dengan Tooltip
+        # Tooltip
         column_config = {
             "Trend": st.column_config.TextColumn("Trend", help="🟢 UPTREND = Harga di atas SMA20\n🔴 DOWNTREND = Harga di bawah SMA50"),
             "Akumulasi / Distribusi": st.column_config.TextColumn(
                 "Akumulasi / Distribusi", 
-                help="💰 AKUMULASI KUAT = Smart money masuk kuat (OBV naik + Volume tinggi + RSI tidak mahal)"
+                help="💰 AKUMULASI KUAT = Smart money masuk kuat (OBV naik + Volume Spike + RSI tidak terlalu tinggi)"
             ),
-            "RSI": st.column_config.TextColumn("RSI (14)", help="RSI < 48 = Potensi naik (Oversold)"),
-            "Vol Spike": st.column_config.TextColumn("Vol Spike", help="> 1.6 = Volume meningkat signifikan (sinyal kuat)")
+            "RSI": st.column_config.TextColumn("RSI (14)", help="RSI < 48 = Potensi Oversold\nRSI > 60 = Potensi Overbought"),
+            "Vol Spike": st.column_config.TextColumn("Vol Spike", help="Volume 10 hari terakhir dibanding rata-rata\n>1.6 = Volume meningkat signifikan")
         }
 
         st.dataframe(styled_df, use_container_width=True, hide_index=True, column_config=column_config)
