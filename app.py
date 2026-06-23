@@ -5,7 +5,7 @@ import numpy as np
 
 st.set_page_config(page_title="IDX Stock Hunter", layout="wide", page_icon="🚀")
 st.title("📈 IDX Stock Hunter")
-st.markdown("**Deteksi Akumulasi Kuat & Rebound - Versi Realistis**")
+st.markdown("**Deteksi Akumulasi Kuat & Rebound - Versi Stabil**")
 
 st.sidebar.header("Pengaturan")
 tickers_input = st.text_area("Ticker Manual (pisah koma)", 
@@ -45,7 +45,6 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 price_30d = ((last['Close'] / hist['Close'].iloc[-31]) - 1) * 100 if len(hist) > 30 else 0
                 vol_spike = round(vol_recent / vol_avg, 2)
 
-                # Logika Realistis (tidak dibuat-buat)
                 if (change > 4 and vol_spike > 1.75) or \
                    (change > 2.5 and vol_spike > 1.65 and rsi < 65) or \
                    (obv_now > obv_30 and vol_spike > 1.6 and rsi < 58):
@@ -72,19 +71,19 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
 
         df = pd.DataFrame(results)
 
-        # ==================== TOP AKUMULASI KUAT ====================
+        # ==================== TOP AKUMULASI ====================
         st.subheader("🏆 Top Emiten Akumulasi Kuat Hari Ini")
         top = df[df['Akumulasi / Distribusi'] == "💰 AKUMULASI KUAT"].sort_values('Change %', ascending=False).head(10)
         if not top.empty:
             st.success(f"✅ Ditemukan {len(top)} emiten Akumulasi Kuat")
             st.dataframe(top, use_container_width=True, hide_index=True)
         else:
-            st.warning("Belum ada emiten yang memenuhi kriteria Akumulasi Kuat saat ini.")
+            st.warning("Belum ada emiten Akumulasi Kuat saat ini.")
 
         # ==================== TABEL LENGKAP DENGAN WARNA ====================
         st.subheader("📋 Semua Hasil Analisa")
 
-        def color_akum(val):
+        def highlight_akum(val):
             if val == "💰 AKUMULASI KUAT":
                 return 'background-color: #90EE90; color: black; font-weight: bold'
             elif val == "💰 Akumulasi Sedang":
@@ -93,18 +92,20 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 return 'background-color: #FFB3B3'
             return ''
 
-        styled_df = df.style.applymap(color_akum, subset=['Akumulasi / Distribusi'])
+        # Styling
+        styled_df = df.style.applymap(highlight_akum, subset=['Akumulasi / Distribusi'])
 
+        # Column Config dengan Tooltip
         column_config = {
             "Trend": st.column_config.TextColumn("Trend", help="🟢 UPTREND = Harga di atas SMA20\n🔴 DOWNTREND = Harga di bawah SMA50"),
             "Akumulasi / Distribusi": st.column_config.TextColumn(
                 "Akumulasi / Distribusi", 
-                help="💰 AKUMULASI KUAT = Smart money masuk kuat (OBV naik + Volume Spike + RSI tidak terlalu tinggi)\n📉 DISTRIBUSI = Smart money keluar"
+                help="💰 AKUMULASI KUAT = Smart money masuk kuat (OBV naik + Volume tinggi + RSI tidak mahal)"
             ),
-            "RSI": st.column_config.TextColumn("RSI (14)", help="RSI < 48 = Potensi Oversold\nRSI > 60 = Potensi Overbought"),
-            "Vol Spike": st.column_config.TextColumn("Vol Spike", help="Volume 10 hari terakhir dibanding rata-rata\n>1.6 = Volume meningkat signifikan")
+            "RSI": st.column_config.TextColumn("RSI (14)", help="RSI < 48 = Potensi naik (Oversold)"),
+            "Vol Spike": st.column_config.TextColumn("Vol Spike", help="> 1.6 = Volume meningkat signifikan (sinyal kuat)")
         }
 
         st.dataframe(styled_df, use_container_width=True, hide_index=True, column_config=column_config)
 
-st.caption("Logika realistis • Warna hijau = Akumulasi Kuat • Refresh berkala untuk update data")
+st.caption("Logika realistis • Warna hijau = Akumulasi Kuat • Refresh berkala")
