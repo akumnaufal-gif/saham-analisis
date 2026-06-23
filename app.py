@@ -4,16 +4,16 @@ import pandas as pd
 import numpy as np
 
 st.set_page_config(page_title="IDX Stock Hunter", layout="wide", page_icon="🚀")
-st.title("📈 IDX Stock Hunter - Deteksi Bandar / Akumulasi")
-st.markdown("**Fokus: Akumulasi Kuat + Bandar Activity**")
+st.title("📈 IDX Stock Hunter")
+st.markdown("**Deteksi Akumulasi Kuat & Rebound - Versi Realistis**")
 
 st.sidebar.header("Pengaturan")
 tickers_input = st.text_area("Ticker Manual (pisah koma)", 
-    "DEWA, BUVA, BBCA, BBRI, BREN, ADRO", height=80)
+    "DEWA, BUVA, BBCA, BBRI, BREN, ADRO, AMRT", height=80)
 
 if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True):
-    with st.spinner("Menganalisis..."):
-        broad = ["DEWA","BUVA","BBCA","BBRI","BMRI","BBNI","TLKM","ASII","ADRO","BREN","AMRT","UNVR","BRIS","GOTO","BUKA"]
+    with st.spinner("Mengambil data..."):
+        broad = ["DEWA","BUVA","BBCA","BBRI","BMRI","BBNI","TLKM","ASII","ADRO","BREN","AMRT","UNVR","BRIS","GOTO"]
         tickers = [t + ".JK" for t in broad]
 
         if tickers_input.strip():
@@ -29,7 +29,8 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 change = round(((last['Close'] - hist.iloc[-2]['Close']) / hist.iloc[-2]['Close']) * 100, 2)
 
                 sma20 = hist['Close'].rolling(20).mean().iloc[-1]
-                trend = "🟢 UPTREND" if last['Close'] > sma20 else "🔴 DOWNTREND"
+                sma50 = hist['Close'].rolling(50).mean().iloc[-1]
+                trend = "🟢 UPTREND" if last['Close'] > sma20 else "🔴 DOWNTREND" if last['Close'] < sma50 else "⚪ SIDEWAYS"
 
                 delta = hist['Close'].diff()
                 gain = delta.where(delta > 0, 0).rolling(14).mean().iloc[-1]
@@ -41,18 +42,18 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 obv_30 = hist['OBV'].iloc[-31] if len(hist) > 30 else obv_now
                 vol_recent = hist['Volume'].tail(10).mean()
                 vol_avg = hist['Volume'].mean()
+                price_30d = ((last['Close'] / hist['Close'].iloc[-31]) - 1) * 100 if len(hist) > 30 else 0
                 vol_spike = round(vol_recent / vol_avg, 2)
 
-                price_30d = ((last['Close'] / hist['Close'].iloc[-31]) - 1) * 100 if len(hist) > 30 else 0
-
-                # Logika Deteksi Bandar / Akumulasi Kuat
-                if (change > 3.0 and vol_spike > 2.0) or \
-                   (change > 2.0 and vol_spike > 1.8 and obv_now > obv_30 and rsi < 65):
-                    akum = "💰 BANDAR MASUK KUAT"
-                elif (obv_now > obv_30 and vol_spike > 1.5) or (rsi < 45 and change > 0):
-                    akum = "💰 Akumulasi / Bandar Sedang Masuk"
-                elif obv_now < obv_30 and vol_spike > 1.5:
-                    akum = "📉 BANDAR KELUAR"
+                # Logika Realistis (tidak dibuat-buat)
+                if (change > 4 and vol_spike > 1.75) or \
+                   (change > 2.5 and vol_spike > 1.65 and rsi < 65) or \
+                   (obv_now > obv_30 and vol_spike > 1.6 and rsi < 58):
+                    akum = "💰 AKUMULASI KUAT"
+                elif (obv_now > obv_30 and rsi < 62) or (rsi < 48):
+                    akum = "💰 Akumulasi Sedang"
+                elif obv_now < obv_30 and rsi > 58:
+                    akum = "📉 DISTRIBUSI"
                 else:
                     akum = "Tidak Jelas"
 
@@ -62,23 +63,48 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                     'Change %': change,
                     'RSI': round(rsi, 1),
                     'Trend': trend,
-                    'Akumulasi / Bandar': akum,
-                    'Vol Spike': vol_spike,
-                    '30 Hari %': round(price_30d, 1)
+                    'Akumulasi / Distribusi': akum,
+                    '30 Hari %': round(price_30d, 1),
+                    'Vol Spike': vol_spike
                 })
             except:
                 continue
 
         df = pd.DataFrame(results)
 
-        st.subheader("🏆 Top Emiten Bandar / Akumulasi Kuat")
-        top = df[df['Akumulasi / Bandar'].str.contains("KUAT|BANDAR MASUK")].sort_values('Change %', ascending=False)
+        # ==================== TOP AKUMULASI KUAT ====================
+        st.subheader("🏆 Top Emiten Akumulasi Kuat Hari Ini")
+        top = df[df['Akumulasi / Distribusi'] == "💰 AKUMULASI KUAT"].sort_values('Change %', ascending=False).head(10)
         if not top.empty:
+            st.success(f"✅ Ditemukan {len(top)} emiten Akumulasi Kuat")
             st.dataframe(top, use_container_width=True, hide_index=True)
         else:
-            st.warning("Belum ada sinyal bandar kuat saat ini.")
+            st.warning("Belum ada emiten yang memenuhi kriteria Akumulasi Kuat saat ini.")
 
-        st.subheader("📋 Semua Hasil")
-        st.dataframe(df.sort_values('Change %', ascending=False), use_container_width=True, hide_index=True)
+        # ==================== TABEL LENGKAP DENGAN WARNA ====================
+        st.subheader("📋 Semua Hasil Analisa")
 
-st.caption("Deteksi berdasarkan Volume Spike + OBV + Price Action • Bukan data broker resmi • Refresh berkala")
+        def color_akum(val):
+            if val == "💰 AKUMULASI KUAT":
+                return 'background-color: #90EE90; color: black; font-weight: bold'
+            elif val == "💰 Akumulasi Sedang":
+                return 'background-color: #D4EDDA'
+            elif val == "📉 DISTRIBUSI":
+                return 'background-color: #FFB3B3'
+            return ''
+
+        styled_df = df.style.applymap(color_akum, subset=['Akumulasi / Distribusi'])
+
+        column_config = {
+            "Trend": st.column_config.TextColumn("Trend", help="🟢 UPTREND = Harga di atas SMA20\n🔴 DOWNTREND = Harga di bawah SMA50"),
+            "Akumulasi / Distribusi": st.column_config.TextColumn(
+                "Akumulasi / Distribusi", 
+                help="💰 AKUMULASI KUAT = Smart money masuk kuat (OBV naik + Volume Spike + RSI tidak terlalu tinggi)\n📉 DISTRIBUSI = Smart money keluar"
+            ),
+            "RSI": st.column_config.TextColumn("RSI (14)", help="RSI < 48 = Potensi Oversold\nRSI > 60 = Potensi Overbought"),
+            "Vol Spike": st.column_config.TextColumn("Vol Spike", help="Volume 10 hari terakhir dibanding rata-rata\n>1.6 = Volume meningkat signifikan")
+        }
+
+        st.dataframe(styled_df, use_container_width=True, hide_index=True, column_config=column_config)
+
+st.caption("Logika realistis • Warna hijau = Akumulasi Kuat • Refresh berkala untuk update data")
