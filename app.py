@@ -27,8 +27,12 @@ if st.button("🚀 JALANKAN ANALISA SEKARANG", type="primary", use_container_wid
         for ticker in tickers:
             try:
                 if mode == "📅 Harian (Swing/Trend)":
-                    hist = yf.Ticker(ticker).history(period="2y", auto_adjust=True)
-                    if len(hist) < 100: continue
+                    # Harian - tetap stabil
+                    hist = yf.Ticker(ticker).history(period="2y")
+                    if len(hist) < 100:
+                        results.append({'Ticker': ticker.replace('.JK',''), 'Status': 'Data harian kurang'})
+                        continue
+                    
                     last = hist.iloc[-1]
                     prev = hist.iloc[-2]
                     change = round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2)
@@ -44,26 +48,34 @@ if st.button("🚀 JALANKAN ANALISA SEKARANG", type="primary", use_container_wid
                     loss = (-delta.where(delta < 0, 0)).rolling(14).mean().iloc[-1]
                     rsi = 100 - (100 / (1 + gain/loss)) if loss != 0 else 50
                     
-                    hist['OBV'] = (hist['Volume'] * np.sign(hist['Close'].diff())).cumsum()
-                    akum = "💰 YA - Akumulasi" if (hist['OBV'].iloc[-1] > hist['OBV'].iloc[-31]) and rsi < 55 else "Tidak"
-                    
-                    results.append({'Ticker': ticker.replace('.JK',''), 'Harga':round(last['Close'],2),
-                                    'Change %':change, 'RSI':round(rsi,1), 'Trend':trend, 'Akumulasi':akum})
+                    results.append({
+                        'Ticker': ticker.replace('.JK',''),
+                        'Harga': round(last['Close'],2),
+                        'Change %': change,
+                        'RSI': round(rsi,1),
+                        'Trend': trend,
+                        'Status': 'OK'
+                    })
                 
                 else:  # SCALPING
-                    # Coba beberapa interval dan period
-                    data = yf.download(ticker, period="10d", interval="5m", progress=False)
-                    if len(data) < 20:
-                        data = yf.download(ticker, period="5d", interval="15m", progress=False)
+                    # Percobaan bertahap
+                    data = None
+                    for attempt in ["5m", "15m", "1h"]:
+                        try:
+                            data = yf.download(ticker, period="10d", interval=attempt, progress=False)
+                            if len(data) >= 20:
+                                break
+                        except:
+                            continue
                     
-                    if len(data) < 20: 
-                        results.append({'Ticker': ticker.replace('.JK',''), 'Status': 'Data intraday tidak tersedia'})
+                    if data is None or len(data) < 20:
+                        results.append({'Ticker': ticker.replace('.JK',''), 'Status': 'Data intraday tidak tersedia (coba saat pasar buka)'})
                         continue
                         
                     last = data.iloc[-1]
                     prev = data.iloc[-2] if len(data) > 1 else last
                     
-                    change5m = round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2)
+                    change = round(((last['Close'] - prev['Close']) / prev['Close']) * 100, 2)
                     
                     # RSI
                     delta = data['Close'].diff()
@@ -77,36 +89,33 @@ if st.button("🚀 JALANKAN ANALISA SEKARANG", type="primary", use_container_wid
                     
                     momentum = round((last['Close'] / data['Close'].iloc[-10] - 1) * 100, 2) if len(data) > 10 else 0
                     
-                    if rsi < 35 and last['Close'] > vwap and momentum > 0:
-                        signal = "🟢 STRONG BUY (Scalping)"
-                    elif rsi > 68 and last['Close'] < vwap and momentum < 0:
+                    if rsi < 35 and last['Close'] > vwap:
+                        signal = "🟢 STRONG BUY"
+                    elif rsi > 68 and last['Close'] < vwap:
                         signal = "🔴 STRONG SELL"
-                    elif rsi < 45 and last['Close'] > vwap:
-                        signal = "🟢 BUY"
-                    elif rsi > 62 and last['Close'] < vwap:
-                        signal = "🔴 SELL"
                     else:
-                        signal = "⚪ Neutral / Tunggu konfirmasi"
+                        signal = "⚪ Neutral"
                     
                     results.append({
                         'Ticker': ticker.replace('.JK',''),
                         'Harga': round(last['Close'],2),
-                        'Change 5m%': change5m,
+                        'Change %': change,
                         'RSI': round(rsi,1),
                         'VWAP': round(vwap,2),
                         'Momentum': momentum,
-                        'Signal Scalping': signal
+                        'Signal Scalping': signal,
+                        'Status': 'OK'
                     })
                     
-            except Exception as e:
+            except:
                 results.append({'Ticker': ticker.replace('.JK',''), 'Status': 'Error'})
                 continue
         
         df = pd.DataFrame(results)
         st.dataframe(df, use_container_width=True, hide_index=True)
         
-        if mode == "⚡ Scalping / Intraday (5 menit)":
-            st.info("💡 Data Scalping paling akurat saat pasar sedang buka (09:00 - 16:00 WIB)")
-            st.warning("⚠️ Scalping sangat berisiko. Gunakan stop loss ketat!")
+        if mode.startswith("⚡"):
+            st.info("💡 Scalping terbaik saat **pasar sedang buka** (09:00 - 16:00 WIB)")
+            st.warning("⚠️ Tidak ada jaminan profit. Scalping sangat berisiko!")
 
-st.caption("Data Yahoo Finance • Klik tombol setiap kali ingin refresh data")
+st.caption("Data dari Yahoo Finance • Refresh dengan klik tombol")
