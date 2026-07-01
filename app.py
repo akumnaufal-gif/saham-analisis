@@ -417,26 +417,37 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
         st.warning("Tidak ada data berhasil dianalisa.")
         st.stop()
 
-    df = pd.DataFrame(results)
+    # ── Simpan ke session_state agar tidak hilang saat filter diklik ──────
+    st.session_state["df"] = pd.DataFrame(results)
+    st.session_state["analyzed"] = True
+    st.rerun()
 
-    SUMMARY = [
-        "Layer","Ticker","Harga","Change %","Pot. Gain %","Trend",
-        "RSI","RSI Signal","BB %B","BB Signal",
-        "Stoch %K","Stoch %D","Stoch Signal",
-        "Probability","Style",
-        "Entry","Stop Loss","Target","R:R",
-        "Vol Spike","Timing","Est. Masuk",
-    ]
-    TECH = [
-        "Layer","Ticker","Harga","Trend",
-        "RSI","RSI Signal","BB %B","BB Width %","BB Signal",
-        "Stoch %K","Stoch %D","Stoch Signal",
-        "Akumulasi","Pre-Surge","Vol Spike","Probability",
-    ]
+# ─────────────────────────────────────────────────────────────────────────────
+# KOLOM TABEL  (didefinisikan di level modul, bukan di dalam button handler)
+# ─────────────────────────────────────────────────────────────────────────────
+SUMMARY = [
+    "Layer","Ticker","Harga","Change %","Pot. Gain %","Trend",
+    "RSI","RSI Signal","BB %B","BB Signal",
+    "Stoch %K","Stoch %D","Stoch Signal",
+    "Probability","Style",
+    "Entry","Stop Loss","Target","R:R",
+    "Vol Spike","Timing","Est. Masuk",
+]
+TECH = [
+    "Layer","Ticker","Harga","Trend",
+    "RSI","RSI Signal","BB %B","BB Width %","BB Signal",
+    "Stoch %K","Stoch %D","Stoch Signal",
+    "Akumulasi","Pre-Surge","Vol Spike","Probability",
+]
 
-    # ─────────────────────────────────────────────────────────────────────
-    # TABS
-    # ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# DISPLAY — di luar blok button agar filter/search tidak reset halaman
+# Setiap interaksi UI (filter, search, tab) hanya menjalankan bagian ini,
+# bukan ulang analisis. Data tetap aman di st.session_state["df"].
+# ─────────────────────────────────────────────────────────────────────────────
+if st.session_state.get("analyzed") and "df" in st.session_state:
+    df = st.session_state["df"]
+
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🔥 Rekomendasi Teratas",
         "🪙 Gocap / Penny Watch",
@@ -470,26 +481,25 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                         f"💡 {row['Alasan Timing']}"
                     )
                     ca, cb, cc, cd = st.columns(4)
-                    ca.metric("Entry Ideal",    f"Rp {row['Entry']:,.0f}")
-                    cb.metric("Stop Loss",      f"Rp {row['Stop Loss']:,.0f}")
-                    cc.metric("Target",         f"Rp {row['Target']:,.0f}")
-                    cd.metric("Pot. Gain %",    f"{row['Pot. Gain %']}%")
+                    ca.metric("Entry Ideal", f"Rp {row['Entry']:,.0f}")
+                    cb.metric("Stop Loss",   f"Rp {row['Stop Loss']:,.0f}")
+                    cc.metric("Target",      f"Rp {row['Target']:,.0f}")
+                    cd.metric("Pot. Gain %", f"{row['Pot. Gain %']}%")
                     st.caption(f"Style: {row['Style']}  ·  {row['Style Reason']}  ·  R:R = {row['R:R']}")
 
     # ── Tab 2: Gocap / Penny ─────────────────────────────────────────────
     with tab2:
         gocap_df = df[df["Harga"] <= 200].sort_values("Probability", ascending=False)
         col_g1, col_g2, col_g3 = st.columns(3)
-        col_g1.metric("Total Gocap (≤55)",  len(df[df["Harga"] <= 55]))
-        col_g2.metric("Total Penny (56–200)", len(df[(df["Harga"] > 55) & (df["Harga"] <= 200)]))
-        col_g3.metric("Pump Potential 🔥",   len(gocap_df[gocap_df["Pre-Surge"] == "🔥 POTENSI PUMP"]))
+        col_g1.metric("Total Gocap (≤55)",    len(df[df["Harga"] <= 55]))
+        col_g2.metric("Total Penny (56–200)",  len(df[(df["Harga"] > 55) & (df["Harga"] <= 200)]))
+        col_g3.metric("Pump Potential 🔥",     len(gocap_df[gocap_df["Pre-Surge"] == "🔥 POTENSI PUMP"]))
 
-        st.markdown("""
-        > **Catatan:** Saham gocap/penny punya potensi % gain besar karena harga rendah,
-        > tapi juga risiko tinggi. Prioritaskan yang ada volume spike kuat.
-        """)
+        st.markdown(
+            "> **Catatan:** Saham gocap/penny punya potensi % gain besar karena harga rendah, "
+            "tapi juga risiko tinggi. Prioritaskan yang ada volume spike kuat."
+        )
 
-        # Filter tambahan khusus gocap
         gocap_filter = st.radio(
             "Filter",
             ["Semua", "Gocap Saja (≤55)", "Penny (56–200)", "Vol Spike > 2×", "Pump Potential"],
