@@ -93,10 +93,24 @@ risk_rp       = st.sidebar.number_input("💰 Risk per Trade (Rp)", value=500_00
                                          help="Digunakan untuk hitung ukuran posisi berdasarkan ATR")
 show_detail   = st.sidebar.checkbox("Tampilkan Detail Expander (Top 5)", value=True)
 st.sidebar.divider()
+debug_mode = st.sidebar.checkbox("🐛 Debug Mode (tampilkan error)", value=False)
 st.sidebar.caption(
     f"Layer 1: {len(LAYER1)} · Layer 2: {len(LAYER2)}\n\n"
     f"Layer 3: {len(set(LAYER3_SPECULATIVE))} · Gocap: {len(set(GOCAP_WATCHLIST))}"
 )
+
+# ── Tombol test koneksi ──────────────────────────────────────────────────
+if st.sidebar.button("🔌 Test Koneksi yfinance"):
+    with st.sidebar:
+        with st.spinner("Testing BBCA.JK..."):
+            try:
+                _test = yf.Ticker("BBCA.JK").history(period="5d")
+                if len(_test) > 0:
+                    st.success(f"OK — {len(_test)} hari data.\nyfinance berfungsi normal.")
+                else:
+                    st.error("Data kosong — tunggu beberapa menit lalu coba lagi.")
+            except Exception as _e:
+                st.error(f"Error: {_e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -162,15 +176,19 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
     tickers = [t + ".JK" for t in pool]
 
     st.info(f"Memindai **{len(tickers)}** saham…")
-    today    = datetime.date.today()
-    results  = []
-    progress = st.progress(0, text="Memulai…")
+    today      = datetime.date.today()
+    results    = []
+    errors     = []   # kumpulkan error untuk debug
+    skipped    = []   # kumpulkan yang dilewati karena data kurang
+    progress   = st.progress(0, text="Memulai…")
 
     for i, ticker in enumerate(tickers):
         progress.progress((i + 1) / len(tickers), text=f"{ticker} ({i+1}/{len(tickers)})")
         try:
-            hist   = yf.Ticker(ticker).history(period="4mo")
-            if len(hist) < 60: continue
+            hist = yf.Ticker(ticker).history(period="4mo")
+            if len(hist) < 60:
+                skipped.append(f"{ticker}: hanya {len(hist)} baris data (min 60)")
+                continue
             close  = hist["Close"]
             high   = hist["High"]
             low    = hist["Low"]
@@ -464,12 +482,32 @@ if st.button("🚀 Analisis Sekarang", type="primary", use_container_width=True)
                 "Verdict Why":     verdict_why,
             })
 
-        except Exception:
+        except Exception as e:
+            errors.append(f"{ticker}: {type(e).__name__}: {e}")
             continue
 
     progress.empty()
+
+    # ── Tampilkan ringkasan debug ────────────────────────────────────────
+    if debug_mode:
+        with st.expander(f"🐛 Debug: {len(errors)} error, {len(skipped)} dilewati"):
+            if errors:
+                st.markdown("**Error:**")
+                for err in errors[:20]:   # max 20 baris
+                    st.code(err)
+            if skipped:
+                st.markdown("**Dilewati (data kurang):**")
+                for sk in skipped[:20]:
+                    st.text(sk)
+
     if not results:
-        st.warning("Tidak ada data berhasil dianalisa.")
+        st.error(
+            "Tidak ada data berhasil dianalisa. Kemungkinan penyebab:\n\n"
+            "1. **yfinance error** — klik **🔌 Test Koneksi** di sidebar\n"
+            "2. **Rate limit** — terlalu banyak request, tunggu 1–2 menit\n"
+            "3. **yfinance versi lama** — jalankan: `pip install --upgrade yfinance`\n\n"
+            "Aktifkan **🐛 Debug Mode** di sidebar lalu analisis ulang untuk lihat error detail."
+        )
         st.stop()
 
     st.session_state["df"]       = pd.DataFrame(results)
